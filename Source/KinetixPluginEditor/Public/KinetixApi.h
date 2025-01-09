@@ -163,6 +163,14 @@ DECLARE_DYNAMIC_DELEGATE_OneParam(FKinetixDownload, bool, bIsSuccess);
 UDELEGATE()
 DECLARE_DYNAMIC_DELEGATE_OneParam(FKinetixGetTokenInfo, bool, bIsSuccess);
 
+/**
+ * Delegate called when upgrading the api (used to validate the api key and setup the animate app settings)
+ *
+ * @param bIsSuccess
+ */
+UDELEGATE()
+DECLARE_DYNAMIC_DELEGATE_OneParam(FKinetixUpgradeApiVersion, bool, bIsSuccess);
+
 UCLASS()
 class KINETIXPLUGINEDITOR_API UKinetixApi : public UBlueprintFunctionLibrary
 {
@@ -200,11 +208,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Kinetix Editor/API")
 	static void DownloadProcessesOutput(const FString &SavePath, const FString &processUuid, const FKinetixDownload &OnComplete);
 	
+	UFUNCTION(BlueprintCallable, Category = "Kinetix Editor/API")
+	static void UpgradeApiVersion(const FKinetixUpgradeApiVersion& OnComplete);
+
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Kinetix Editor/API")
 	static void GetLoginUrl(FString& url);
 
 private:
-	static void ParseAndLogError(FHttpResponsePtr Response);
+	static void ParseAndLogError(FHttpResponsePtr Response, const FString MethodName);
 
 	static void ParseKinetixProcess(TSharedPtr<FJsonObject> jsonValue, FKinetixProcess& process);
 };

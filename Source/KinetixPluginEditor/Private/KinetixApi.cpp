@@ -54,6 +54,15 @@ variable->SetHeader(TEXT("x-api-key"), _apiKey)
 #define READ_JSON_VALUE(toReturnVar, jsonVar, method, jsonVariable, upperJsonVariable)\
 toReturnVar.b##upperJsonVariable##IsDefined = jsonVar->method(TEXT(#jsonVariable), toReturnVar.jsonVariable)
 
+#define SET_REQUEST_TEXT_CONTENT(text)\
+{\
+	FString _ContentText = text;\
+	int32 _ContentUtf8Length = FTCHARToUTF8_Convert::ConvertedLength(*_ContentText, _ContentText.Len());\
+	TArray<uint8> _ContentBuffer;\
+	_ContentBuffer.SetNumUninitialized(_ContentUtf8Length);\
+	FTCHARToUTF8_Convert::Convert((UTF8CHAR*)_ContentBuffer.GetData(), _ContentBuffer.Num(), *_ContentText, _ContentText.Len());\
+	HttpRequest->SetContent( _ContentBuffer );\
+}
 
 /**
  * Create a http request.
@@ -97,7 +106,7 @@ void UKinetixApi::ListProcesses(const FKinetixProcessArrayDelegate &OnComplete)
 			if (!bDeserializationResult)
 			{
 				UE_LOG(LogTemp, Warning,
-					TEXT("[UKinetixApi] Unable to deserialize response ! %s"),
+					TEXT("[UKinetixApi]:ListProcesses Unable to deserialize response ! %s"),
 					*jsonReader.Get().GetErrorMessage());
 	
 				OnComplete.Execute(toReturn, false);
@@ -120,11 +129,12 @@ void UKinetixApi::ListProcesses(const FKinetixProcessArrayDelegate &OnComplete)
 				toReturn.Add(currentReturnValue);
 			}
 
+			UE_LOG(LogTemp, Log, TEXT("[UKinetixApi]:ListProcesses Request success"));
 			OnComplete.Execute(toReturn, true);
 		}
 		else
 		{
-			ParseAndLogError(Response);
+			ParseAndLogError(Response, TEXT("ListProcesses"));
 			OnComplete.Execute(toReturn, false);
 		}
 	, OnComplete);
@@ -152,7 +162,7 @@ void UKinetixApi::GetProcess(const FString& processUuid, const FKinetixProcessDe
 			if (!bDeserializationResult)
 			{
 				UE_LOG(LogTemp, Warning,
-					TEXT("[UKinetixApi] Unable to deserialize response ! %s"),
+					TEXT("[UKinetixApi]:GetProcess Unable to deserialize response ! %s"),
 					*jsonReader.Get().GetErrorMessage());
 	
 				OnComplete.Execute(toReturn, false);
@@ -161,11 +171,12 @@ void UKinetixApi::GetProcess(const FString& processUuid, const FKinetixProcessDe
 
 			ParseKinetixProcess(jsonValue, toReturn);
 
+			UE_LOG(LogTemp, Log, TEXT("[UKinetixApi]:GetProcess Request success"));
 			OnComplete.Execute(toReturn, true);
 		}
 		else
 		{
-			ParseAndLogError(Response);
+			ParseAndLogError(Response, TEXT("GetProcess"));
 			OnComplete.Execute(toReturn, false);
 		}
 	, OnComplete);
@@ -191,7 +202,7 @@ void UKinetixApi::CreateProcessToken(const FKinetixProcessTokenDelegate &OnCompl
 			if (!bDeserializationResult)
 			{
 				UE_LOG(LogTemp, Warning,
-					TEXT("[UKinetixApi] Unable to deserialize response ! %s"),
+					TEXT("[UKinetixApi]:CreateProcessToken Unable to deserialize response ! %s"),
 					*jsonReader.Get().GetErrorMessage());
 
 				OnComplete.Execute(toReturn, false);
@@ -205,11 +216,12 @@ void UKinetixApi::CreateProcessToken(const FKinetixProcessTokenDelegate &OnCompl
 			//FString expire;
 			READ_JSON_VALUE(toReturn, jsonValue, TryGetStringField, expire, Expire);
 
+			UE_LOG(LogTemp, Log, TEXT("[UKinetixApi]:CreateProcessToken Request success"));
 			OnComplete.Execute(toReturn, true);
 		}
 		else
 		{
-			ParseAndLogError(Response);
+			ParseAndLogError(Response, TEXT("CreateProcessToken"));
 			OnComplete.Execute(toReturn, false);
 		}
 	, OnComplete);
@@ -246,10 +258,22 @@ void UKinetixApi::GetTokenInfo(const FString& tokenUuid, const FKinetixGetTokenI
 		}*/
 
 		int32 responseCode = Response->GetResponseCode();
-		OnComplete.Execute(responseCode >= 200 && responseCode < 400);
+		bool isSuccessCode = responseCode >= 200 && responseCode < 400;
+
+		if (isSuccessCode)
+		{
+			UE_LOG(LogTemp, Log, TEXT("[UKinetixApi]:GetTokenInfo Request success"));
+		}
+		else
+		{
+			ParseAndLogError(Response, TEXT("GetTokenInfo"));
+		}
+
+		OnComplete.Execute(isSuccessCode);
 	}
 	else
 	{
+		ParseAndLogError(Response, TEXT("GetTokenInfo"));
 		OnComplete.Execute(false);
 	}
 	, OnComplete);
@@ -260,7 +284,7 @@ void UKinetixApi::GetTokenInfo(const FString& tokenUuid, const FKinetixGetTokenI
 
 void UKinetixApi::DownloadProcessesOutput(const FString &SavePath, const FString &processUuid, const FKinetixDownload &OnComplete)
 {
-	FString url = FString::Printf(TEXT("/v1/process/%s/download?format=fbx&rig=rpm"), *processUuid);
+	FString url = FString::Printf(TEXT("/v2/process/%s/download?format=fbx&rig=bibi"), *processUuid);
 	url = API_URL(*url);
 
 	HTTP_REQUEST(HttpRequest, url, "GET",
@@ -270,18 +294,18 @@ void UKinetixApi::DownloadProcessesOutput(const FString &SavePath, const FString
 			TArray<uint8> content = Response->GetContent();
 			if (FFileHelper::SaveArrayToFile(content, *SavePath))
 			{
-				UE_LOG(LogTemp, Log, TEXT("[UKinetixApi] FBX file saved successfully at: %s"), *SavePath);
+				UE_LOG(LogTemp, Log, TEXT("[UKinetixApi]:DownloadProcessesOutput FBX file saved successfully at: %s"), *SavePath);
 				OnComplete.Execute(true);
 			}
 			else
 			{
-				UE_LOG(LogTemp, Error, TEXT("[UKinetixApi] Failed to save FBX file at: %s"), *SavePath);
+				UE_LOG(LogTemp, Error, TEXT("[UKinetixApi]:DownloadProcessesOutput Failed to save FBX file at: %s"), *SavePath);
 				OnComplete.Execute(false);
 			}
 		}
 		else
 		{
-			ParseAndLogError(Response);
+			ParseAndLogError(Response, TEXT("DownloadProcessesOutput"));
 			OnComplete.Execute(false);
 		}
 	, OnComplete, SavePath);
@@ -293,16 +317,76 @@ void UKinetixApi::DownloadProcessesOutput(const FString &SavePath, const FString
 	HttpRequest->ProcessRequest();
 }
 
+void UKinetixApi::UpgradeApiVersion(const FKinetixUpgradeApiVersion& OnComplete)
+{
+	FString url = FString::Printf(TEXT("/v1/application/config/"));
+	url = API_URL(*url);
+
+	HTTP_REQUEST(HttpRequest, url, "PUT",
+		if (bWasSuccessful && Response.IsValid())
+		{
+			/**/
+			/* Uncoment this json template to handle JSON's response */
+			/**/
+			/*const FString jsonResponse = Response->GetContentAsString();
+
+			TSharedPtr<FJsonObject> jsonValue;
+			TSharedRef<TJsonReader<>> jsonReader = TJsonReaderFactory<>::Create(jsonResponse);
+
+			const bool bDeserializationResult = FJsonSerializer::Deserialize(jsonReader, jsonValue);
+			if (!bDeserializationResult)
+			{
+				UE_LOG(LogTemp, Warning,
+					TEXT("[UKinetixApi] Unable to deserialize response ! %s"),
+					*jsonReader.Get().GetErrorMessage());
+
+				OnComplete.Execute(false);
+				return;
+			}*/
+
+
+			int32 responseCode = Response->GetResponseCode();
+			bool isSuccessCode = responseCode >= 200 && responseCode < 400;
+			
+			if (isSuccessCode)
+			{
+				UE_LOG(LogTemp, Log, TEXT("[UKinetixApi]:UpgradeApiVersion Upgraded Api Version to V2"));
+			}
+			else
+			{
+				ParseAndLogError(Response, TEXT("UpgradeApiVersion"));
+			}
+
+			OnComplete.Execute(isSuccessCode);
+		}
+		else
+		{
+			ParseAndLogError(Response, TEXT("UpgradeApiVersion"));
+			OnComplete.Execute(false);
+		}
+	, OnComplete);
+
+	HttpRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
+	HttpRequest->SetHeader(TEXT("Accept"), TEXT("application/json, text/plain, */*"));
+	HttpRequest->SetHeader(TEXT("Accept-Encoding"), TEXT("gzip, deflate, br, zstd"));
+	SET_REQUEST_TEXT_CONTENT(TEXT("{ \"mlVersion\": 2 }"));
+	
+	HttpRequest->ProcessRequest();
+
+	
+}
+
+
 void UKinetixApi::GetLoginUrl(FString& url)
 {
 	url = LOGIN_URL;
 }
 
-void UKinetixApi::ParseAndLogError(FHttpResponsePtr Response)
+void UKinetixApi::ParseAndLogError(FHttpResponsePtr Response, const FString MethodName)
 {
 	if (Response == nullptr)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[UKinetixApi] HTTP Request failed with error code ERR_INTERNET_DISCONNECTED and message: No internet connection"));
+		UE_LOG(LogTemp, Error, TEXT("[UKinetixApi]:%s HTTP Request failed with error code ERR_INTERNET_DISCONNECTED and message: No internet connection"), *MethodName);
 		return;
 	}
 
@@ -316,21 +400,21 @@ void UKinetixApi::ParseAndLogError(FHttpResponsePtr Response)
 	const bool bDeserializationResult = FJsonSerializer::Deserialize(jsonReader, jsonValue);
 	if (!bDeserializationResult)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[UKinetixApi] HTTP Request failed with error code %d and message: ?"), responseCode);
+		UE_LOG(LogTemp, Error, TEXT("[UKinetixApi]:%s HTTP Request failed with error code %d and message: ?"), *MethodName, responseCode);
 		UE_LOG(LogTemp, Warning,
-			TEXT("[UKinetixApi] Unable to deserialize error ! %s"),
+			TEXT("[UKinetixApi]:%s Unable to deserialize error ! %s"), *MethodName,
 			*jsonReader.Get().GetErrorMessage());
-		UE_LOG(LogTemp, Error, TEXT("[UKinetixApi] Server error returned : '%s'"), *jsonResponse);
+		UE_LOG(LogTemp, Error, TEXT("[UKinetixApi]:%s Server error returned : '%s'"), *MethodName, *jsonResponse);
 		return;
 	}
 	
 	FString message, details;
 	jsonValue->TryGetStringField(TEXT("message"), message);
-	UE_LOG(LogTemp, Error, TEXT("[UKinetixApi] HTTP Request failed (%d) with error message: %s."), responseCode, *message);
+	UE_LOG(LogTemp, Error, TEXT("[UKinetixApi]:%s HTTP Request failed (%d) with error message: %s."), *MethodName, responseCode, *message);
 	jsonValue->TryGetStringField(TEXT("details"), details);
 	
 	if (!details.IsEmpty())
-		UE_LOG(LogTemp, Error, TEXT("[UKinetixApi] HTTP Request Error Details: '%s'."), *details);
+		UE_LOG(LogTemp, Error, TEXT("[UKinetixApi]:%s HTTP Request Error Details: '%s'."), *MethodName, *details);
 }
 
 void UKinetixApi::ParseKinetixProcess(TSharedPtr<FJsonObject> jsonValue, FKinetixProcess& process)
