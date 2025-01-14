@@ -10,9 +10,8 @@
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 
-
-#define KINETIX_STAGING
-
+//Internal testing define, require a staging api key
+//#define KINETIX_STAGING
 
 //MACRO for "https://"
 

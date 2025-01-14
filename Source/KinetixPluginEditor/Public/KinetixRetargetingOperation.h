@@ -33,6 +33,8 @@ public:
 	FString SourcePackage;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Kinetix Editor")
 	FString DestinationPackage;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Kinetix Editor")
+	TArray<FString> NewNames;
 
 	UFUNCTION(BlueprintCallable, DisplayName = "Create Kinetix Retargeting Operation", Category = "Kinetix Editor")
 	static UKinetixRetargetingOperation* Create(UObject* Outer, UIKRetargeter* IKRetargetAsset, const FString& _SourcePackage = "", const FString& _DestinationPackage = "");

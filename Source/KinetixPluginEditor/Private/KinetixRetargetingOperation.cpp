@@ -6,6 +6,8 @@
 #include "EngineUtils.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "UObject/SavePackage.h"
+#include "FileHelpers.h"
+#include "AssetToolsModule.h"
 
 UKinetixRetargetingOperation* UKinetixRetargetingOperation::Create(UObject* _Outer, UIKRetargeter* _IKRetargetAsset, const FString& _SourcePackage, const FString& _DestinationPackage)
 {
@@ -13,7 +15,7 @@ UKinetixRetargetingOperation* UKinetixRetargetingOperation::Create(UObject* _Out
 	toReturn->RetargetAsset = _IKRetargetAsset;
 	toReturn->SourcePackage = _SourcePackage;
 	toReturn->DestinationPackage = _DestinationPackage;
-
+	
 	return toReturn;
 }
 
@@ -46,12 +48,10 @@ void UKinetixRetargetingOperation::RetargetWith2SkeletalMeshes(TArray<UAnimSeque
 {
 	BatchContext.AssetsToRetarget.Reset();
 	BatchContext.NameRule.FolderPath = DestinationPackage; //Export folder
-	BatchContext.NameRule.ReplaceFrom = TEXT("_"); //Name_Uuid
-	BatchContext.NameRule.ReplaceTo = TEXT("_") + FPaths::GetBaseFilename(DestinationPackage) + TEXT("_"); //Name_Skeleton_Uuid
 	BatchContext.IKRetargetAsset = RetargetAsset;
 	BatchContext.SourceMesh = InputSkeletalMesh;
 	BatchContext.TargetMesh = OutputSkeletalMesh;
-	
+
 	BatchContext.bOverwriteExistingFiles = true;
 	BatchContext.bIncludeReferencedAssets = true;
 #if ENGINE_MAJOR_VERSION >= 5 && ENGINE_MINOR_VERSION > 4
@@ -67,5 +67,34 @@ void UKinetixRetargetingOperation::RetargetWith2SkeletalMeshes(TArray<UAnimSeque
 
 	//Retarget
 	const TStrongObjectPtr<UIKRetargetBatchOperation> BatchOperation(NewObject<UIKRetargetBatchOperation>());
-	BatchOperation->RunRetarget(BatchContext);	
+	BatchOperation->RunRetarget(BatchContext);
+
+	//Save
+	TArray<FAssetRenameData> toRename;
+
+	int32 newNamesNum = NewNames.Num();
+	int32 animationsNum = Animation.Num();
+	for (int32 i = 0; i < animationsNum; i++)
+	{
+		UAnimSequence* uAnimSequence = LoadObject<UAnimSequence>(NULL, *FPaths::Combine(DestinationPackage, Animation[i]->GetName()), NULL, LOAD_None, NULL);
+
+		if (uAnimSequence == nullptr)
+			continue;
+
+		UEditorLoadingAndSavingUtils::SavePackages({uAnimSequence->GetPackage()}, false);
+
+		//Collect rename data
+		if (i < newNamesNum) 
+		{
+			FAssetRenameData renameData;
+			renameData.Asset = uAnimSequence;
+			renameData.NewName = FPaths::GetBaseFilename(NewNames[i]);
+			renameData.NewPackagePath = *DestinationPackage;
+			toRename.Add(renameData);
+		}
+	}
+
+	//Rename
+	FAssetToolsModule& AssetToolsModule = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools");
+	AssetToolsModule.Get().RenameAssets(toRename);
 }

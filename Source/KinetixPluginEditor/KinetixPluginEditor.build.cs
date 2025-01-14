@@ -36,7 +36,7 @@ public class KinetixPluginEditor : ModuleRules
 				"ToolMenus",
 				"Projects",
 				"UMGEditor",
-                "DeveloperSettings"
+                "DeveloperSettings",
 			}
 		);
 	}
